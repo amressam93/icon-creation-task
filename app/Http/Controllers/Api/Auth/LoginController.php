@@ -1,14 +1,12 @@
 <?php
 
-namespace App\Http\Controllers\Auth;
+namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Traits\ResponseTrait;
 use App\Repositories\UserRepository;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Auth;
-use Session;
 
 class LoginController extends Controller
 {
@@ -19,14 +17,6 @@ class LoginController extends Controller
         $this->userRepository = $userRepository;
     }
 
-    public function showLoginForm()
-    {
-        if (auth()->check()) {
-            return redirect()->route('dashboard');
-        }
-        return view('auth.login');
-    }
-
     public function login(Request $request){
         try {
             $validation = Validator::make($request->all(), [
@@ -35,60 +25,49 @@ class LoginController extends Controller
             ]);
 
             if ($validation->fails()) {
-                return redirect()->back()->withErrors($validation->errors())->withInput();
+                return $this->validationResponse($validation);
             }
             $email = $request->input('email');
             $password = $request->input('password');
             $user = $this->userRepository->getByEmail($email);
             if($user) {
-                $result = $this->userRepository->processLogin($user,$password);
+                $result = $this->userRepository->processLogin($user, $password,true);
                 return $this->handleLoginResult($result);
             }
-            return redirect()->back()->withErrors(['email' => 'User Not Found'])->withInput();
+            return $this->notFoundResponse("User Not Found");
 
         } catch (\Exception $e) {
             $message = "Oops Something Went Wrong. Please Try Again Later";
-            return redirect()->back()->withErrors(['error' => $message])->withInput();
+            return $this->logicErrorResponse($message);
         }
     }
 
     private function handleLoginResult($result)
     {
         $status = $result['status'];
+        $data = $result['data'];
         switch ($status) {
             case 'success':
-                return redirect()->route('dashboard')->with('success', 'Login Successful');
+                return $this->successResponse("Login Successful", $data);
             case 'blocked':
-                return redirect()->back()->withErrors(['error' => 'Your account is blocked. Please contact support for assistance'])->withInput();
+                return $this->forbiddenResponse("Your account is blocked");
             case 'max_devices':
-                return redirect()->back()->withErrors(['error' => 'You are logged in from two devices'])->withInput();
+                return $this->forbiddenResponse("You're logged in from two devices");
             case 'invalid_password':
-                return redirect()->back()->withErrors(['error' => 'Invalid password'])->withInput();
+                return $this->unauthorizedResponse("Invalid password");
             case 'max_attempts':
-                return redirect()->back()->withErrors(['error' => 'Please try again after 30 seconds'])->withInput();
-        }
-    }
-
-    public function dashboard()
-    {
-        if (auth()->check()) {
-            return view('dashboard');
-        } else {
-            return view('auth.login');
+                return $this->customResponse("Please try again after 30 seconds", null, 429);
         }
     }
 
     public function logout(Request $request)
     {
-        $user = Auth::user();
+        $user = auth('api')->user();
         // Delete user token associated with the current device
         $user->userTokens()
             ->where('user_agent', $request->userAgent())
             ->delete();
-
-        Session::flush();
-        Auth::logout();
-        return Redirect('login');
+        auth('api')->logout();
+        return $this->successResponse("Logged Out");
     }
-
 }

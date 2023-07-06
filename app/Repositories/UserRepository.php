@@ -16,7 +16,7 @@ interface UserRepository
 
     public function create(array $data): User;
 
-    public function getAllOrderedByIndexes(): Collection;
+    public function getAllOrderedByIndexes(): object;
 
     public function isAccountBlocked(User $user): bool;
 
@@ -36,5 +36,5 @@ interface UserRepository
 
     public function isMaxDevicesReached(User $user): bool;
 
-    public function processLogin(User $user, string $password): array;
+    public function processLogin(User $user, string $password,$api = false): array;
 }

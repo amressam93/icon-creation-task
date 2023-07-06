@@ -1,9 +1,10 @@
 <?php
 
-namespace App\Http\Controllers\Auth;
+namespace App\Http\Controllers\Api\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
+use App\Http\Traits\ResponseTrait;
 use App\Repositories\UserRepository;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,16 +13,13 @@ use Illuminate\Support\Facades\Validator;
 
 class RegisterController extends Controller
 {
+    use ResponseTrait;
     protected $userRepository;
     public function __construct(UserRepository $userRepository)
     {
         $this->userRepository = $userRepository;
     }
-    public function showRegistrationForm()
-    {
-        return view('auth.register');
-    }
-    public function register(Request $request){
+    public function __invoke(Request $request){
         try {
             $validation = Validator::make($request->all(), [
                 'name' => 'required|string|max:255',
@@ -30,14 +28,18 @@ class RegisterController extends Controller
             ]);
 
             if ($validation->fails()) {
-                return redirect()->back()->withErrors($validation->errors())->withInput();
+                return $this->validationResponse($validation);
             }
             $validatedData = $validation->validated();
             $validatedData['password'] = Hash::make($validatedData['password']);
             $user = $this->userRepository->create($validatedData);
-            if($user){
-                return redirect()->route('login')->with('success', 'Registered Successfully');
-            }
+            $token = Auth::guard('api')->login($user, true);
+            $data = [
+                'user' => new UserResource(Auth::guard('api')->user()),
+                'token' => 'Bearer ' . $token,
+            ];
+            $message = "Registered Successfully";
+            return $this->successResponse($message,$data);
         }
         catch (\Exception $e) {
             $message = "Oops Something Went Wrong Please Try Again Later";

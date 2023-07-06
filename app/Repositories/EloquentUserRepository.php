@@ -6,6 +6,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Models\UserToken;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 class EloquentUserRepository implements UserRepository
 {
@@ -29,9 +30,9 @@ class EloquentUserRepository implements UserRepository
         return User::create($data);
     }
 
-    public function getAllOrderedByIndexes(): Collection
+    public function getAllOrderedByIndexes(): object
     {
-        return User::orderBy('email')->orderBy('is_blocked')->get();
+        return User::orderBy('email')->orderBy('is_blocked');
     }
 
     public function isAccountBlocked(User $user): bool
@@ -92,7 +93,7 @@ class EloquentUserRepository implements UserRepository
         return $userTokenCount >= $maxDevices;
     }
 
-    public function processLogin(User $user, string $password): array
+    public function processLogin(User $user, string $password,$api = false): array
     {
         if ($this->isMaxDevicesReached($user)) {
            return $this->handleLoginResponse('max_devices');
@@ -103,18 +104,30 @@ class EloquentUserRepository implements UserRepository
         if ($this->verifyPassword($password, $user)) {
             $this->resetLoginAttempts($user);
             $this->createUserToken($user);
-            return $this->loginSuccess($user);
+            if($api){
+                return $this->loginSuccessApi($user);
+            }
+            return $this->loginSuccess($user,$password);
         } else {
             return $this->loginFailure($user);
         }
     }
 
-    private function loginSuccess(user $user): array
+    private function loginSuccessApi(user $user): array
     {
         $token = auth('api')->login($user, true);
         $data['user'] = new UserResource(auth('api')->user());
         $data['token'] = 'Bearer ' . $token;
         return $this->handleLoginResponse('success',$data);
+    }
+
+    private function loginSuccess(user $user,$password): array
+    {
+        $credentials['email'] = $user->email;
+        $credentials['password'] = $password;
+        if (Auth::attempt($credentials)){
+            return $this->handleLoginResponse('success');
+        }
     }
 
     private function loginFailure(user $user): array
