@@ -20,7 +20,7 @@ class UserController extends Controller
 
     public function index()
     {
-        $users = $this->userRepository->getAllOrderedByIndexes();
+        $users = $this->userRepository->getAllOrderedByIndexes()->get();
         $data['users'] = new UserCollection($users);
         return $this->successResponse("User data retrieved successfully",$data);
     }
